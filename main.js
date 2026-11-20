@@ -332,17 +332,36 @@
       if (!message) { st.textContent = 'Please write a message.'; form.message.focus(); return; }
       if (form._honey.value) return;
       const btn = $('button[type=submit]', form); btn.disabled = true; st.textContent = 'Sending…';
+      const subject = `New project enquiry from ${name} (seiranabdullah.me)`;
+      const done = () => {
+        form.innerHTML = `<span class="cm"></span><div class="cf-done"><div class="tcx mono">00:00:00:00 · DELIVERED</div><h2>Thank you, <em>${name.replace(/[<>&"]/g, '')}.</em></h2><p>Your message is on its way. I usually reply within 24 hours.</p><button class="btn ink" type="button">Close</button></div>`;
+        $('.btn', form).addEventListener('click', close); happyChime(); track('form_submit');
+      };
+      // classic POST into a hidden frame: works even when fetch/CORS is blocked (ad blockers, first-time activation)
+      const classicPost = () => new Promise(res => {
+        const ifr = document.createElement('iframe'); ifr.name = 'fs' + Date.now(); ifr.style.display = 'none'; ifr.setAttribute('aria-hidden', 'true');
+        const f = document.createElement('form'); f.method = 'POST'; f.action = 'https://formsubmit.co/seiranabdullah@gmail.com'; f.target = ifr.name; f.style.display = 'none';
+        const add = (k, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); };
+        add('name', name); add('email', email); add('message', message); add('_replyto', email); add('_subject', subject); add('_template', 'table'); add('_captcha', 'false');
+        document.body.append(ifr, f);
+        let fin = false; const end = () => { if (fin) return; fin = true; setTimeout(() => { ifr.remove(); f.remove(); }, 4000); res(); };
+        ifr.addEventListener('load', end); setTimeout(end, 6000);
+        f.submit();
+      });
       try {
         const r = await fetch('https://formsubmit.co/ajax/seiranabdullah@gmail.com', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ name, email, message, _replyto: email, _subject: `New project enquiry from ${name} (seiranabdullah.me)`, _template: 'table' })
+          body: JSON.stringify({ name, email, message, _replyto: email, _subject: subject, _template: 'table', _captcha: 'false' })
         });
-        if (!r.ok) throw new Error('send failed');
-        form.innerHTML = `<span class="cm"></span><div class="cf-done"><div class="tcx mono">00:00:00:00 · DELIVERED</div><h2>Thank you, <em>${name.replace(/[<>&"]/g, '')}.</em></h2><p>Your message is on its way. I usually reply within 24 hours.</p><button class="btn ink" type="button">Close</button></div>`;
-        $('.btn', form).addEventListener('click', close); happyChime(); track('form_submit');
-      } catch {
-        st.innerHTML = 'Could not send from here. <a href="mailto:seiranabdullah@gmail.com?subject=' + encodeURIComponent('Project enquiry from ' + name) + '&body=' + encodeURIComponent(message + '\n\n' + name + ' · ' + email) + '">Open it in your email app →</a>';
-        btn.disabled = false;
+        let data = {}; try { data = await r.json(); } catch (e) {}
+        if (!r.ok || String(data.success) !== 'true') throw new Error(data.message || ('HTTP ' + r.status));
+        done();
+      } catch (err) {
+        try { await classicPost(); done(); }
+        catch (e2) {
+          st.innerHTML = 'Could not send from here. <a href="mailto:seiranabdullah@gmail.com?subject=' + encodeURIComponent('Project enquiry from ' + name) + '&body=' + encodeURIComponent(message + '\n\n' + name + ' · ' + email) + '">Open it in your email app →</a>';
+          btn.disabled = false;
+        }
       }
     });
   }
