@@ -1,4 +1,5 @@
 (() => {
+  const W3F_KEY = '7e872cf9-7383-41d5-808d-16d41f50b317'; // Web3Forms access key (sent to seiranabdullah@gmail.com)
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -337,31 +338,29 @@
         form.innerHTML = `<span class="cm"></span><div class="cf-done"><div class="tcx mono">00:00:00:00 · DELIVERED</div><h2>Thank you, <em>${name.replace(/[<>&"]/g, '')}.</em></h2><p>Your message is on its way. I usually reply within 24 hours.</p><button class="btn ink" type="button">Close</button></div>`;
         $('.btn', form).addEventListener('click', close); happyChime(); track('form_submit');
       };
-      // classic POST into a hidden frame: works even when fetch/CORS is blocked (ad blockers, first-time activation)
-      const classicPost = () => new Promise(res => {
-        const ifr = document.createElement('iframe'); ifr.name = 'fs' + Date.now(); ifr.style.display = 'none'; ifr.setAttribute('aria-hidden', 'true');
-        const f = document.createElement('form'); f.method = 'POST'; f.action = 'https://formsubmit.co/seiranabdullah@gmail.com'; f.target = ifr.name; f.style.display = 'none';
-        const add = (k, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); };
-        add('name', name); add('email', email); add('message', message); add('_replyto', email); add('_subject', subject); add('_template', 'table'); add('_captcha', 'false');
-        document.body.append(ifr, f);
-        let fin = false; const end = () => { if (fin) return; fin = true; setTimeout(() => { ifr.remove(); f.remove(); }, 4000); res(); };
-        ifr.addEventListener('load', end); setTimeout(end, 6000);
-        f.submit();
-      });
       try {
-        const r = await fetch('https://formsubmit.co/ajax/seiranabdullah@gmail.com', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ name, email, message, _replyto: email, _subject: subject, _template: 'table', _captcha: 'false' })
-        });
-        let data = {}; try { data = await r.json(); } catch (e) {}
-        if (!r.ok || String(data.success) !== 'true') throw new Error(data.message || ('HTTP ' + r.status));
+        let ok = false, why = '';
+        if (W3F_KEY) {
+          const r = await fetch('https://api.web3forms.com/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ access_key: W3F_KEY, subject, from_name: name + ' · seiranabdullah.me', name, email, replyto: email, message, botcheck: '' })
+          });
+          let data = {}; try { data = await r.json(); } catch (e) {}
+          ok = r.ok && data.success === true; why = data.message || ('HTTP ' + r.status);
+        } else {
+          const r = await fetch('https://formsubmit.co/ajax/seiranabdullah@gmail.com', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ name, email, message, _replyto: email, _subject: subject, _template: 'table', _captcha: 'false' })
+          });
+          let data = {}; try { data = await r.json(); } catch (e) {}
+          ok = r.ok && String(data.success) === 'true'; why = data.message || ('HTTP ' + r.status);
+        }
+        if (!ok) throw new Error(why);
         done();
       } catch (err) {
-        try { await classicPost(); done(); }
-        catch (e2) {
-          st.innerHTML = 'Could not send from here. <a href="mailto:seiranabdullah@gmail.com?subject=' + encodeURIComponent('Project enquiry from ' + name) + '&body=' + encodeURIComponent(message + '\n\n' + name + ' · ' + email) + '">Open it in your email app →</a>';
-          btn.disabled = false;
-        }
+        console.warn('[form]', err && err.message);
+        st.innerHTML = 'Message not delivered. <a href="mailto:seiranabdullah@gmail.com?subject=' + encodeURIComponent('Project enquiry from ' + name) + '&body=' + encodeURIComponent(message + '\n\n' + name + ' · ' + email) + '">Email me directly →</a>';
+        btn.disabled = false;
       }
     });
   }
